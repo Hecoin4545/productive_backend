@@ -44,6 +44,8 @@ app.use('/api/study-sessions', require('./routes/studySessions'));
 app.use('/api/journals', require('./routes/journals'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/resources', require('./routes/resources'));
+app.use('/api/search', require('./routes/search'));
 
 // Health check
 app.get('/api/health', (req, res) => {

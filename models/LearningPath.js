@@ -15,6 +15,20 @@ const learningPathSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  goal: {
+    type: String,
+    default: ''
+  },
+  subject: {
+    type: String,
+    enum: ['DSA', 'Machine Learning', 'Web Development', 'Mathematics', 'System Design', 'Other'],
+    default: 'DSA'
+  },
+  difficulty: {
+    type: String,
+    enum: ['Beginner', 'Intermediate', 'Advanced'],
+    default: 'Intermediate'
+  },
   progress: {
     type: Number,
     default: 0,
@@ -29,6 +43,19 @@ const learningPathSchema = new mongoose.Schema({
   color: {
     type: String,
     default: '#6366f1'
+  },
+  startDate: {
+    type: Date,
+    default: Date.now
+  },
+  targetDate: {
+    type: Date,
+    default: null
+  },
+  currentTopicId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Topic',
+    default: null
   },
   createdAt: {
     type: Date,
