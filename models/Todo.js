@@ -28,6 +28,31 @@ const todoSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  dueTime: {
+    type: String,
+    default: ''
+  },
+  startTime: {
+    type: String,
+    default: ''
+  },
+  endTime: {
+    type: String,
+    default: ''
+  },
+  estimatedDuration: {
+    type: String,
+    default: ''
+  },
+  type: {
+    type: String,
+    enum: ['todo', 'study_session', 'deadline', 'milestone', 'planned_session'],
+    default: 'todo'
+  },
+  tags: [{
+    type: String,
+    trim: true
+  }],
   learningPathId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'LearningPath',

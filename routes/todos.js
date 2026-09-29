@@ -6,7 +6,7 @@ const Todo = require('../models/Todo');
 // Get all todos for user
 router.get('/', auth, async (req, res) => {
   try {
-    const { completed, learningPathId } = req.query;
+    const { completed, learningPathId, type, date } = req.query;
     const filter = { userId: req.userId };
 
     if (completed !== undefined) {
@@ -14,6 +14,15 @@ router.get('/', auth, async (req, res) => {
     }
     if (learningPathId) {
       filter.learningPathId = learningPathId;
+    }
+    if (type) {
+      filter.type = type;
+    }
+    if (date) {
+      const d = new Date(date);
+      const startOfDay = new Date(d.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(d.setHours(23, 59, 59, 999));
+      filter.dueDate = { $gte: startOfDay, $lte: endOfDay };
     }
 
     const todos = await Todo.find(filter).sort({ createdAt: -1 }).populate('learningPathId', 'title color');
@@ -41,7 +50,7 @@ router.get('/:id', auth, async (req, res) => {
 // Create todo
 router.post('/', auth, async (req, res) => {
   try {
-    const { title, description, priority, dueDate, learningPathId } = req.body;
+    const { title, description, priority, dueDate, dueTime, startTime, endTime, estimatedDuration, type, tags, learningPathId } = req.body;
 
     if (!title) {
       return res.status(400).json({ success: false, message: 'Title is required' });
@@ -53,6 +62,12 @@ router.post('/', auth, async (req, res) => {
       description: description || '',
       priority: priority || 'medium',
       dueDate: dueDate || null,
+      dueTime: dueTime || '',
+      startTime: startTime || '',
+      endTime: endTime || '',
+      estimatedDuration: estimatedDuration || '',
+      type: type || 'todo',
+      tags: tags || [],
       learningPathId: learningPathId || null
     });
 
@@ -67,7 +82,7 @@ router.post('/', auth, async (req, res) => {
 // Update todo
 router.put('/:id', auth, async (req, res) => {
   try {
-    const { title, description, completed, priority, dueDate, learningPathId } = req.body;
+    const { title, description, completed, priority, dueDate, dueTime, startTime, endTime, estimatedDuration, type, tags, learningPathId } = req.body;
     const updates = {};
 
     if (title !== undefined) updates.title = title;
@@ -75,6 +90,12 @@ router.put('/:id', auth, async (req, res) => {
     if (completed !== undefined) updates.completed = completed;
     if (priority !== undefined) updates.priority = priority;
     if (dueDate !== undefined) updates.dueDate = dueDate;
+    if (dueTime !== undefined) updates.dueTime = dueTime;
+    if (startTime !== undefined) updates.startTime = startTime;
+    if (endTime !== undefined) updates.endTime = endTime;
+    if (estimatedDuration !== undefined) updates.estimatedDuration = estimatedDuration;
+    if (type !== undefined) updates.type = type;
+    if (tags !== undefined) updates.tags = tags;
     if (learningPathId !== undefined) updates.learningPathId = learningPathId;
 
     const todo = await Todo.findOneAndUpdate(

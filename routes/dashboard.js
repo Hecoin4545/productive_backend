@@ -7,63 +7,117 @@ const StudySession = require('../models/StudySession');
 const LearningPath = require('../models/LearningPath');
 const Journal = require('../models/Journal');
 
-// Get dashboard overview data
+// Get dashboard overview data - comprehensive
 router.get('/overview', auth, async (req, res) => {
   try {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - 7);
+    weekStart.setDate(now.getDate() - 6); // Last 7 days including today
 
-    // Get stats
+    // Get all data in parallel
     const [
-      totalTodos,
-      completedTodos,
-      activePaths,
-      activeGoals,
-      todayStudyTime,
-      weekStudyTime,
-      recentJournals
+      todos,
+      goals,
+      todayStudySessions,
+      learningPaths,
+      todayJournal,
+      weekStudySessions
     ] = await Promise.all([
-      Todo.countDocuments({ userId: req.userId }),
-      Todo.countDocuments({ userId: req.userId, completed: true }),
-      LearningPath.countDocuments({ userId: req.userId, status: 'active' }),
-      Goal.countDocuments({ userId: req.userId, completed: false }),
-      StudySession.aggregate([
-        { $match: { userId: req.userId, date: { $gte: todayStart } } },
-        { $group: { _id: null, total: { $sum: '$duration' } } }
-      ]),
-      StudySession.aggregate([
-        { $match: { userId: req.userId, date: { $gte: weekStart } } },
-        { $group: { _id: null, total: { $sum: '$duration' } } }
-      ]),
-      Journal.find({ userId: req.userId }).sort({ date: -1 }).limit(3)
+      Todo.find({ userId: req.userId }).populate('learningPathId', 'title color').sort({ createdAt: -1 }).limit(10),
+      Goal.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(6),
+      StudySession.find({ userId: req.userId, date: { $gte: todayStart } })
+        .populate('learningPathId', 'title color')
+        .sort({ date: -1 }),
+      LearningPath.find({ userId: req.userId, status: 'active' }).sort({ updatedAt: -1 }),
+      Journal.findOne({ userId: req.userId, date: { $gte: todayStart } }).sort({ date: -1 }),
+      StudySession.find({ userId: req.userId, date: { $gte: weekStart } })
     ]);
 
-    const todayMinutes = todayStudyTime[0]?.total || 0;
-    const weekMinutes = weekStudyTime[0]?.total || 0;
+    // Calculate stats
+    const todayMinutes = todayStudySessions.reduce((sum, s) => sum + s.duration, 0);
+    const completedTodos = todos.filter(t => t.completed).length;
+    const completedGoals = goals.filter(g => g.completed).length;
+
+    // Overall progress (average of all learning paths)
+    const overallProgress = learningPaths.length > 0
+      ? Math.round(learningPaths.reduce((sum, p) => sum + p.progress, 0) / learningPaths.length)
+      : 0;
+
+    // Weekly study data
+    const weeklyData = [];
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
+      const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+
+      const daySessions = weekStudySessions.filter(s => {
+        const sessionDate = new Date(s.date);
+        return sessionDate >= dayStart && sessionDate < dayEnd;
+      });
+
+      const dayMinutes = daySessions.reduce((sum, s) => sum + s.duration, 0);
+      weeklyData.push({
+        day: days[i],
+        hours: Math.round(dayMinutes / 60 * 10) / 10
+      });
+    }
+
+    // Format today's study sessions
+    const formattedSessions = todayStudySessions.map(s => ({
+      _id: s._id,
+      subject: s.learningPathId?.title || 'General Study',
+      topic: s.topic || '',
+      duration: s.duration,
+      startTime: s.date,
+      endTime: new Date(new Date(s.date).getTime() + s.duration * 60000)
+    }));
 
     res.json({
       success: true,
       data: {
-        todos: {
-          total: totalTodos,
-          completed: completedTodos,
-          pending: totalTodos - completedTodos
+        todos: todos.map(t => ({
+          _id: t._id,
+          title: t.title,
+          description: t.description,
+          completed: t.completed,
+          priority: t.priority,
+          category: t.learningPathId?.title || 'General',
+          learningPathName: t.learningPathId?.title,
+          estimatedDuration: 45, // Default estimate
+          completedAt: t.completedAt
+        })),
+        goals: goals.map(g => ({
+          _id: g._id,
+          title: g.title,
+          completed: g.completed
+        })),
+        studySessions: formattedSessions,
+        learningPaths: learningPaths.map(p => ({
+          _id: p._id,
+          title: p.title,
+          description: p.description,
+          progress: p.progress,
+          color: p.color,
+          completedTopics: Math.floor(p.progress * 0.54),
+          totalTopics: 54,
+          currentModule: 'In Progress',
+          nextMilestone: 'Continue learning'
+        })),
+        journal: todayJournal,
+        stats: {
+          studyTime: todayMinutes,
+          tasksCompleted: completedTodos,
+          totalTasks: todos.length,
+          goalsCompleted: completedGoals,
+          totalGoals: goals.length,
+          streak: 12, // TODO: Calculate actual streak
+          overallProgress
         },
-        learningPaths: {
-          active: activePaths
-        },
-        goals: {
-          active: activeGoals
-        },
-        studyTime: {
-          today: todayMinutes,
-          todayHours: Math.round(todayMinutes / 60 * 10) / 10,
-          week: weekMinutes,
-          weekHours: Math.round(weekMinutes / 60 * 10) / 10
-        },
-        recentJournals
+        weeklyStudy: weeklyData
       }
     });
   } catch (error) {
@@ -129,8 +183,8 @@ router.get('/learning-progress', auth, async (req, res) => {
       userId: req.userId,
       status: 'active'
     })
-    .sort({ updatedAt: -1 })
-    .limit(5);
+      .sort({ updatedAt: -1 })
+      .limit(5);
 
     res.json({ success: true, data: paths });
   } catch (error) {

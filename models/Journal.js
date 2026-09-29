@@ -6,28 +6,65 @@ const journalSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  date: {
+    type: Date,
+    default: Date.now
+  },
   title: {
     type: String,
     required: true,
     trim: true
   },
-  content: {
+  whatIDid: {
     type: String,
-    required: true
+    default: ''
   },
-  mood: {
+  whatILearned: {
     type: String,
-    enum: ['great', 'good', 'okay', 'bad', 'terrible'],
-    default: 'okay'
+    default: ''
+  },
+  whatWentWell: {
+    type: String,
+    default: ''
+  },
+  difficulties: {
+    type: String,
+    default: ''
+  },
+  notes: {
+    type: String,
+    default: ''
+  },
+  tomorrow: {
+    type: String,
+    default: ''
+  },
+  technicalNotes: {
+    type: String,
+    default: ''
   },
   tags: [{
     type: String,
     trim: true
   }],
-  date: {
-    type: Date,
-    default: Date.now
-  },
+  attachments: [{
+    type: String
+  }],
+  linkedLearningPaths: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LearningPath'
+  }],
+  linkedTopics: [{
+    type: String
+  }],
+  linkedGoals: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Goal'
+  }],
+  linkedTodos: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Todo'
+  }],
   createdAt: {
     type: Date,
     default: Date.now
