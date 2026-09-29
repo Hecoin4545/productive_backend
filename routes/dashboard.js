@@ -69,11 +69,11 @@ router.get('/overview', auth, async (req, res) => {
     // Format today's study sessions
     const formattedSessions = todayStudySessions.map(s => ({
       _id: s._id,
-      subject: s.learningPathId?.title || 'General Study',
-      topic: s.topic || '',
-      duration: s.duration,
-      startTime: s.date,
-      endTime: new Date(new Date(s.date).getTime() + s.duration * 60000)
+      subject: s.subject || s.learningPathId?.title || 'General Study',
+      topic: s.moduleName || s.topicName || s.topic || '',
+      duration: s.duration ? Math.round(s.duration / 60) : 0, // convert seconds to minutes for dashboard
+      startTime: s.startTime || s.date,
+      endTime: s.endTime || (s.startTime ? new Date(new Date(s.startTime).getTime() + (s.duration || 0) * 1000) : null)
     }));
 
     res.json({
