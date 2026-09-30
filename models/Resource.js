@@ -86,7 +86,7 @@ const resourceSchema = new mongoose.Schema({
   }
 });
 
-resourceSchema.pre('save', function(next) {
+resourceSchema.pre('save', function() {
   this.updatedAt = Date.now();
 
   // Auto detect domain if url present
@@ -112,8 +112,6 @@ resourceSchema.pre('save', function(next) {
       this.type = 'article';
     }
   }
-
-  next();
 });
 
 module.exports = mongoose.model('Resource', resourceSchema);

@@ -68,9 +68,8 @@ const todoSchema = new mongoose.Schema({
   }
 });
 
-todoSchema.pre('save', function(next) {
+todoSchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('Todo', todoSchema);

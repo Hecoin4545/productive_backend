@@ -60,9 +60,8 @@ const topicSchema = new mongoose.Schema({
   }
 });
 
-topicSchema.pre('save', function(next) {
+topicSchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('Topic', topicSchema);

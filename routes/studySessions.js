@@ -195,7 +195,7 @@ router.post('/', auth, async (req, res) => {
     res.status(201).json({ success: true, data: populatedSession });
   } catch (error) {
     console.error('Create study session error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({ success: false, message: 'Server error', error: error.message, stack: error.stack });
   }
 });
 

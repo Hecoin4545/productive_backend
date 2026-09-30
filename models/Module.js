@@ -53,9 +53,8 @@ const moduleSchema = new mongoose.Schema({
   }
 });
 
-moduleSchema.pre('save', function(next) {
+moduleSchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('Module', moduleSchema);

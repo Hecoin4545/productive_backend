@@ -67,9 +67,8 @@ const learningPathSchema = new mongoose.Schema({
   }
 });
 
-learningPathSchema.pre('save', function(next) {
+learningPathSchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('LearningPath', learningPathSchema);

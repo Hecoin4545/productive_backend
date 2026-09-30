@@ -50,9 +50,8 @@ const goalSchema = new mongoose.Schema({
   }
 });
 
-goalSchema.pre('save', function(next) {
+goalSchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('Goal', goalSchema);

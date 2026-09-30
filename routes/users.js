@@ -13,6 +13,7 @@ router.get('/profile', auth, async (req, res) => {
         name: req.user.name,
         email: req.user.email,
         avatar: req.user.avatar,
+        customSubjects: req.user.customSubjects || [],
         createdAt: req.user.createdAt
       }
     });
@@ -25,11 +26,12 @@ router.get('/profile', auth, async (req, res) => {
 // Update user profile
 router.put('/profile', auth, async (req, res) => {
   try {
-    const { name, avatar } = req.body;
+    const { name, avatar, customSubjects } = req.body;
     const updates = {};
 
     if (name) updates.name = name;
     if (avatar !== undefined) updates.avatar = avatar;
+    if (customSubjects !== undefined) updates.customSubjects = customSubjects;
 
     const user = await User.findByIdAndUpdate(
       req.userId,
@@ -43,7 +45,8 @@ router.put('/profile', auth, async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        avatar: user.avatar
+        avatar: user.avatar,
+        customSubjects: user.customSubjects || []
       }
     });
   } catch (error) {

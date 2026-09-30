@@ -21,6 +21,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  customSubjects: [{
+    type: String,
+    trim: true
+  }],
   createdAt: {
     type: Date,
     default: Date.now

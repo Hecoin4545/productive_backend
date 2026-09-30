@@ -101,9 +101,8 @@ const studySessionSchema = new mongoose.Schema({
   }
 });
 
-studySessionSchema.pre('save', function(next) {
+studySessionSchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 // Virtual for formatted duration

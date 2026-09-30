@@ -75,9 +75,8 @@ const journalSchema = new mongoose.Schema({
   }
 });
 
-journalSchema.pre('save', function(next) {
+journalSchema.pre('save', function() {
   this.updatedAt = Date.now();
-  next();
 });
 
 module.exports = mongoose.model('Journal', journalSchema);

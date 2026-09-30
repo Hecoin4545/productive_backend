@@ -35,7 +35,7 @@ router.get('/overview', auth, async (req, res) => {
     ]);
 
     // Calculate stats
-    const todayMinutes = todayStudySessions.reduce((sum, s) => sum + s.duration, 0);
+    const todayMinutes = Math.round(todayStudySessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 60);
     const completedTodos = todos.filter(t => t.completed).length;
     const completedGoals = goals.filter(g => g.completed).length;
 
@@ -59,10 +59,10 @@ router.get('/overview', auth, async (req, res) => {
         return sessionDate >= dayStart && sessionDate < dayEnd;
       });
 
-      const dayMinutes = daySessions.reduce((sum, s) => sum + s.duration, 0);
+      const daySeconds = daySessions.reduce((sum, s) => sum + (s.duration || 0), 0);
       weeklyData.push({
         day: days[i],
-        hours: Math.round(dayMinutes / 60 * 10) / 10
+        hours: Math.round(daySeconds / 3600 * 10) / 10
       });
     }
 
