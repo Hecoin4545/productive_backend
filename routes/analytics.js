@@ -5,7 +5,6 @@ const StudySession = require('../models/StudySession');
 const Todo = require('../models/Todo');
 const Goal = require('../models/Goal');
 const LearningPath = require('../models/LearningPath');
-const Journal = require('../models/Journal');
 
 // Utility function to get start and end dates based on query params
 function parseDateRange(query) {
@@ -189,12 +188,6 @@ router.get('/overview', auth, async (req, res) => {
       }
     }
 
-    // Journal entries in period
-    const journalCount = await Journal.countDocuments({
-      userId,
-      date: { $gte: startDate, $lte: endDate }
-    });
-
     res.json({
       success: true,
       data: {
@@ -211,7 +204,6 @@ router.get('/overview', auth, async (req, res) => {
         totalGoals,
         currentStreak,
         longestStreak,
-        journalEntries: journalCount,
         period,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString()
@@ -604,7 +596,7 @@ router.get('/goals', auth, async (req, res) => {
 router.get('/heatmap', auth, async (req, res) => {
   try {
     const userId = req.userId;
-    const metric = req.query.metric || 'studyTime'; // studyTime, tasks, journal
+    const metric = req.query.metric || 'studyTime'; // studyTime, tasks
 
     const now = new Date();
     const startDate = new Date(now);
@@ -622,11 +614,6 @@ router.get('/heatmap', auth, async (req, res) => {
       updatedAt: { $gte: startDate }
     });
 
-    const journals = await Journal.find({
-      userId,
-      date: { $gte: startDate }
-    });
-
     // Map by YYYY-MM-DD
     const dateMap = {};
     const curr = new Date(startDate);
@@ -638,8 +625,7 @@ router.get('/heatmap', auth, async (req, res) => {
         date: new Date(curr),
         formattedDate: curr.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         studySeconds: 0,
-        tasksCount: 0,
-        journalCount: 0
+        tasksCount: 0
       };
       curr.setDate(curr.getDate() + 1);
     }
@@ -660,14 +646,6 @@ router.get('/heatmap', auth, async (req, res) => {
       }
     });
 
-    journals.forEach(j => {
-      const d = new Date(j.date);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      if (dateMap[key]) {
-        dateMap[key].journalCount += 1;
-      }
-    });
-
     const matrix = Object.values(dateMap).map(item => {
       let value = 0;
       let level = 0; // 0, 1, 2, 3, 4
@@ -675,9 +653,6 @@ router.get('/heatmap', auth, async (req, res) => {
       if (metric === 'tasks') {
         value = item.tasksCount;
         if (value > 0) level = Math.min(4, Math.ceil(value / 2));
-      } else if (metric === 'journal') {
-        value = item.journalCount;
-        if (value > 0) level = Math.min(4, value * 2);
       } else {
         value = item.studySeconds;
         const mins = value / 60;
@@ -797,80 +772,12 @@ router.get('/habits', auth, async (req, res) => {
   }
 });
 
-// 11. GET /api/analytics/journal
-router.get('/journal', auth, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { startDate, endDate } = parseDateRange(req.query);
-
-    const journals = await Journal.find({
-      userId,
-      date: { $gte: startDate, $lte: endDate }
-    }).sort({ date: -1 });
-
-    const tagCounts = {};
-    journals.forEach(j => {
-      (j.tags || []).forEach(t => {
-        tagCounts[t] = (tagCounts[t] || 0) + 1;
-      });
-      (j.linkedTopics || []).forEach(t => {
-        tagCounts[t] = (tagCounts[t] || 0) + 1;
-      });
-    });
-
-    const topTopics = Object.entries(tagCounts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    // Calculate streak
-    let journalStreak = 0;
-    const allJournals = await Journal.find({ userId }).sort({ date: -1 });
-    const jDatesSet = new Set();
-    allJournals.forEach(j => {
-      const d = new Date(j.date);
-      jDatesSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-    });
-
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    let checkDate = new Date(today);
-
-    if (!jDatesSet.has(todayStr)) {
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
-    while (true) {
-      const dateStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
-      if (jDatesSet.has(dateStr)) {
-        journalStreak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else {
-        break;
-      }
-    }
-
-    res.json({
-      success: true,
-      data: {
-        journalCount: journals.length,
-        journalStreak,
-        activeJournalDays: jDatesSet.size,
-        mostUsedTopics: topTopics
-      }
-    });
-  } catch (error) {
-    console.error('Analytics journal error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// 12. GET /api/analytics/recent-activity
+// 11. GET /api/analytics/recent-activity
 router.get('/recent-activity', auth, async (req, res) => {
   try {
     const userId = req.userId;
     const sessions = await StudySession.find({ userId, status: 'completed' }).sort({ date: -1 }).limit(5);
     const todos = await Todo.find({ userId, completed: true }).sort({ updatedAt: -1 }).limit(5);
-    const journals = await Journal.find({ userId }).sort({ date: -1 }).limit(3);
 
     const activities = [];
 
@@ -896,17 +803,6 @@ router.get('/recent-activity', auth, async (req, res) => {
       });
     });
 
-    journals.forEach(j => {
-      activities.push({
-        id: `journal_${j._id}`,
-        type: 'journal',
-        title: `Added Journal: ${j.title}`,
-        subtitle: j.content ? j.content.slice(0, 50) + '...' : 'Reflection entry',
-        date: j.date,
-        icon: 'BookOpen'
-      });
-    });
-
     activities.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     res.json({
@@ -928,7 +824,6 @@ router.get('/export', auth, async (req, res) => {
 
     const sessions = await StudySession.find({ userId, status: 'completed', date: { $gte: startDate, $lte: endDate } });
     const todos = await Todo.find({ userId, updatedAt: { $gte: startDate, $lte: endDate } });
-    const journals = await Journal.find({ userId, date: { $gte: startDate, $lte: endDate } });
 
     const exportData = {
       user: req.userId,
@@ -938,12 +833,10 @@ router.get('/export', auth, async (req, res) => {
         totalStudySessions: sessions.length,
         totalStudySeconds: sessions.reduce((sum, s) => sum + (s.duration || 0), 0),
         totalTodos: todos.length,
-        completedTodos: todos.filter(t => t.completed).length,
-        totalJournals: journals.length
+        completedTodos: todos.filter(t => t.completed).length
       },
       studySessions: sessions,
-      todos,
-      journals
+      todos
     };
 
     if (format === 'csv') {
@@ -953,9 +846,6 @@ router.get('/export', auth, async (req, res) => {
       });
       todos.forEach(t => {
         csv += `Todo,"${t._id}","${t.title}","${t.createdAt.toISOString()}",${t.completed ? 'Completed' : 'Pending'}\n`;
-      });
-      journals.forEach(j => {
-        csv += `Journal,"${j._id}","${j.title}","${j.date.toISOString()}",Logged\n`;
       });
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=arcstep-analytics.csv');

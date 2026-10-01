@@ -41,7 +41,6 @@ app.use('/api/learning-paths', require('./routes/learningPaths'));
 app.use('/api/todos', require('./routes/todos'));
 app.use('/api/goals', require('./routes/goals'));
 app.use('/api/study-sessions', require('./routes/studySessions'));
-app.use('/api/journals', require('./routes/journals'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/resources', require('./routes/resources'));

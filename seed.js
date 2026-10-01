@@ -8,7 +8,6 @@ const LearningPath = require('./models/LearningPath');
 const Todo = require('./models/Todo');
 const Goal = require('./models/Goal');
 const StudySession = require('./models/StudySession');
-const Journal = require('./models/Journal');
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
@@ -28,8 +27,7 @@ async function seed() {
       LearningPath.deleteMany({}),
       Todo.deleteMany({}),
       Goal.deleteMany({}),
-      StudySession.deleteMany({}),
-      Journal.deleteMany({})
+      StudySession.deleteMany({})
     ]);
     console.log('Cleared existing data');
 
@@ -243,17 +241,6 @@ async function seed() {
     }
     await StudySession.create(weekSessions);
     console.log('Created weekly study sessions:', weekSessions.length);
-
-    // Create a journal entry
-    const journal = await Journal.create({
-      userId: user._id,
-      title: `Reflection - ${new Date().toLocaleDateString()}`,
-      content: 'Made good progress on dynamic programming today. Solved several challenging problems and feel more confident with memoization patterns.',
-      mood: 'good',
-      tags: ['productive', 'learning'],
-      date: new Date()
-    });
-    console.log('Created journal entry');
 
     console.log('\n✅ Seed completed successfully!');
     console.log('\nYou can now log in with:');

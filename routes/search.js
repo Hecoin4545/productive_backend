@@ -6,7 +6,6 @@ const Module = require('../models/Module');
 const Topic = require('../models/Topic');
 const Resource = require('../models/Resource');
 const Todo = require('../models/Todo');
-const Journal = require('../models/Journal');
 
 // Global search across Arcstep
 router.get('/global', auth, async (req, res) => {
@@ -19,8 +18,7 @@ router.get('/global', auth, async (req, res) => {
           learningPaths: [],
           topics: [],
           resources: [],
-          todos: [],
-          journals: []
+          todos: []
         }
       });
     }
@@ -28,12 +26,11 @@ router.get('/global', auth, async (req, res) => {
     const regex = new RegExp(q, 'i');
     const userId = req.userId;
 
-    const [learningPaths, topics, resources, todos, journals] = await Promise.all([
+    const [learningPaths, topics, resources, todos] = await Promise.all([
       LearningPath.find({ userId, $or: [{ title: regex }, { description: regex }, { subject: regex }] }).limit(5),
       Topic.find({ userId, $or: [{ title: regex }, { description: regex }] }).populate('learningPathId', 'title').limit(5),
       Resource.find({ userId, $or: [{ title: regex }, { description: regex }, { tags: regex }, { notes: regex }] }).limit(5),
-      Todo.find({ userId, $or: [{ title: regex }, { description: regex }] }).limit(5),
-      Journal.find({ userId, $or: [{ title: regex }, { whatIDid: regex }, { whatILearned: regex }, { tags: regex }] }).limit(5)
+      Todo.find({ userId, $or: [{ title: regex }, { description: regex }] }).limit(5)
     ]);
 
     res.json({
@@ -43,8 +40,7 @@ router.get('/global', auth, async (req, res) => {
         learningPaths,
         topics,
         resources,
-        todos,
-        journals
+        todos
       }
     });
   } catch (error) {

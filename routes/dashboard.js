@@ -5,7 +5,6 @@ const Todo = require('../models/Todo');
 const Goal = require('../models/Goal');
 const StudySession = require('../models/StudySession');
 const LearningPath = require('../models/LearningPath');
-const Journal = require('../models/Journal');
 
 // Get dashboard overview data - comprehensive
 router.get('/overview', auth, async (req, res) => {
@@ -21,7 +20,6 @@ router.get('/overview', auth, async (req, res) => {
       goals,
       todayStudySessions,
       learningPaths,
-      todayJournal,
       weekStudySessions
     ] = await Promise.all([
       Todo.find({ userId: req.userId }).populate('learningPathId', 'title color').sort({ createdAt: -1 }).limit(10),
@@ -30,7 +28,6 @@ router.get('/overview', auth, async (req, res) => {
         .populate('learningPathId', 'title color')
         .sort({ date: -1 }),
       LearningPath.find({ userId: req.userId, status: 'active' }).sort({ updatedAt: -1 }),
-      Journal.findOne({ userId: req.userId, date: { $gte: todayStart } }).sort({ date: -1 }),
       StudySession.find({ userId: req.userId, date: { $gte: weekStart } })
     ]);
 
@@ -107,7 +104,6 @@ router.get('/overview', auth, async (req, res) => {
           currentModule: 'In Progress',
           nextMilestone: 'Continue learning'
         })),
-        journal: todayJournal,
         stats: {
           studyTime: todayMinutes,
           tasksCompleted: completedTodos,
