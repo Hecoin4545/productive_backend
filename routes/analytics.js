@@ -6,6 +6,14 @@ const Todo = require('../models/Todo');
 const Goal = require('../models/Goal');
 const LearningPath = require('../models/LearningPath');
 
+// Applies the same subject / learning path filters to every session-based endpoint
+function buildSessionFilter(req, extra = {}) {
+  const filter = { userId: req.userId, status: 'completed', ...extra };
+  if (req.query.subject && req.query.subject !== 'all') filter.subject = req.query.subject;
+  if (req.query.learningPathId && req.query.learningPathId !== 'all') filter.learningPathId = req.query.learningPathId;
+  return filter;
+}
+
 // Utility function to get start and end dates based on query params
 function parseDateRange(query) {
   const now = new Date();
@@ -303,73 +311,12 @@ router.get('/study-time', auth, async (req, res) => {
   }
 });
 
-// 3. GET /api/analytics/study-trend
-router.get('/study-trend', auth, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const { startDate, endDate, period } = parseDateRange(req.query);
-
-    const filter = {
-      userId,
-      status: 'completed',
-      date: { $gte: startDate, $lte: endDate }
-    };
-
-    const sessions = await StudySession.find(filter).sort({ date: 1 });
-
-    const dailyMap = {};
-    sessions.forEach(s => {
-      const d = new Date(s.date);
-      const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      dailyMap[dayKey] = (dailyMap[dayKey] || 0) + (s.duration || 0);
-    });
-
-    const points = [];
-    const curr = new Date(startDate);
-    let cumulative = 0;
-
-    while (curr <= endDate) {
-      const dayKey = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}-${String(curr.getDate()).padStart(2, '0')}`;
-      const daySecs = dailyMap[dayKey] || 0;
-      cumulative += daySecs;
-
-      points.push({
-        date: dayKey,
-        label: curr.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        seconds: daySecs,
-        hours: Math.round((daySecs / 3600) * 10) / 10,
-        cumulativeHours: Math.round((cumulative / 3600) * 10) / 10
-      });
-
-      curr.setDate(curr.getDate() + 1);
-    }
-
-    res.json({
-      success: true,
-      data: {
-        points,
-        period
-      }
-    });
-  } catch (error) {
-    console.error('Analytics study trend error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// 4. GET /api/analytics/subjects
+// 3. GET /api/analytics/subjects
 router.get('/subjects', auth, async (req, res) => {
   try {
-    const userId = req.userId;
     const { startDate, endDate } = parseDateRange(req.query);
 
-    const filter = {
-      userId,
-      status: 'completed',
-      date: { $gte: startDate, $lte: endDate }
-    };
-
-    const sessions = await StudySession.find(filter);
+    const sessions = await StudySession.find(buildSessionFilter(req, { date: { $gte: startDate, $lte: endDate } }));
     const totalSecs = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
 
     const subjectMap = {};
@@ -410,18 +357,14 @@ router.get('/subjects', auth, async (req, res) => {
   }
 });
 
-// 5. GET /api/analytics/learning-paths
+// 4. GET /api/analytics/learning-paths
 router.get('/learning-paths', auth, async (req, res) => {
   try {
     const userId = req.userId;
     const { startDate, endDate } = parseDateRange(req.query);
 
     const learningPaths = await LearningPath.find({ userId });
-    const sessions = await StudySession.find({
-      userId,
-      status: 'completed',
-      date: { $gte: startDate, $lte: endDate }
-    });
+    const sessions = await StudySession.find(buildSessionFilter(req, { date: { $gte: startDate, $lte: endDate } }));
     const todos = await Todo.find({ userId });
 
     const lpStats = learningPaths.map(lp => {
@@ -464,17 +407,12 @@ router.get('/learning-paths', auth, async (req, res) => {
   }
 });
 
-// 6. GET /api/analytics/topics
+// 5. GET /api/analytics/topics
 router.get('/topics', auth, async (req, res) => {
   try {
-    const userId = req.userId;
     const { startDate, endDate } = parseDateRange(req.query);
 
-    const sessions = await StudySession.find({
-      userId,
-      status: 'completed',
-      date: { $gte: startDate, $lte: endDate }
-    });
+    const sessions = await StudySession.find(buildSessionFilter(req, { date: { $gte: startDate, $lte: endDate } }));
 
     const topicMap = {};
     sessions.forEach(s => {
@@ -507,7 +445,7 @@ router.get('/topics', auth, async (req, res) => {
   }
 });
 
-// 7. GET /api/analytics/todos
+// 6. GET /api/analytics/todos
 router.get('/todos', auth, async (req, res) => {
   try {
     const userId = req.userId;
@@ -552,73 +490,26 @@ router.get('/todos', auth, async (req, res) => {
   }
 });
 
-// 8. GET /api/analytics/goals
-router.get('/goals', auth, async (req, res) => {
-  try {
-    const userId = req.userId;
-    const goals = await Goal.find({ userId });
-
-    const completed = goals.filter(g => g.completed).length;
-    const total = goals.length;
-    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-    const byType = {
-      daily: { total: 0, completed: 0 },
-      weekly: { total: 0, completed: 0 },
-      monthly: { total: 0, completed: 0 },
-      'long-term': { total: 0, completed: 0 }
-    };
-
-    goals.forEach(g => {
-      const t = g.type || 'weekly';
-      if (!byType[t]) byType[t] = { total: 0, completed: 0 };
-      byType[t].total += 1;
-      if (g.completed) byType[t].completed += 1;
-    });
-
-    res.json({
-      success: true,
-      data: {
-        completed,
-        total,
-        completionRate,
-        byType,
-        goalsList: goals
-      }
-    });
-  } catch (error) {
-    console.error('Analytics goals error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-
-// 9. GET /api/analytics/heatmap
+// 7. GET /api/analytics/heatmap
 router.get('/heatmap', auth, async (req, res) => {
   try {
-    const userId = req.userId;
     const metric = req.query.metric || 'studyTime'; // studyTime, tasks
 
-    const now = new Date();
-    const startDate = new Date(now);
-    startDate.setDate(startDate.getDate() - 120); // 120 days for grid view
+    const { startDate, endDate } = parseDateRange(req.query);
 
-    const sessions = await StudySession.find({
-      userId,
-      status: 'completed',
-      date: { $gte: startDate }
-    });
+    const sessions = await StudySession.find(buildSessionFilter(req, { date: { $gte: startDate, $lte: endDate } }));
 
     const todos = await Todo.find({
-      userId,
+      userId: req.userId,
       completed: true,
-      updatedAt: { $gte: startDate }
+      updatedAt: { $gte: startDate, $lte: endDate }
     });
 
     // Map by YYYY-MM-DD
     const dateMap = {};
     const curr = new Date(startDate);
 
-    while (curr <= now) {
+    while (curr <= endDate) {
       const key = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}-${String(curr.getDate()).padStart(2, '0')}`;
       dateMap[key] = {
         dateKey: key,
@@ -690,17 +581,12 @@ router.get('/heatmap', auth, async (req, res) => {
   }
 });
 
-// 10. GET /api/analytics/habits
+// 8. GET /api/analytics/habits
 router.get('/habits', auth, async (req, res) => {
   try {
-    const userId = req.userId;
     const { startDate, endDate } = parseDateRange(req.query);
 
-    const sessions = await StudySession.find({
-      userId,
-      status: 'completed',
-      date: { $gte: startDate, $lte: endDate }
-    });
+    const sessions = await StudySession.find(buildSessionFilter(req, { date: { $gte: startDate, $lte: endDate } }));
 
     // Day of week distribution (Sun = 0, Mon = 1, ...)
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -772,7 +658,7 @@ router.get('/habits', auth, async (req, res) => {
   }
 });
 
-// 11. GET /api/analytics/recent-activity
+// 9. GET /api/analytics/recent-activity
 router.get('/recent-activity', auth, async (req, res) => {
   try {
     const userId = req.userId;
@@ -815,7 +701,7 @@ router.get('/recent-activity', auth, async (req, res) => {
   }
 });
 
-// 13. GET /api/analytics/export
+// 10. GET /api/analytics/export
 router.get('/export', auth, async (req, res) => {
   try {
     const userId = req.userId;

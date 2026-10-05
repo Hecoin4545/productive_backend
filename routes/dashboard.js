@@ -22,7 +22,7 @@ router.get('/overview', auth, async (req, res) => {
       learningPaths,
       weekStudySessions
     ] = await Promise.all([
-      Todo.find({ userId: req.userId }).populate('learningPathId', 'title color').sort({ createdAt: -1 }).limit(10),
+      Todo.find({ userId: req.userId }).populate('learningPathId', 'title color').sort({ createdAt: -1 }).limit(200),
       Goal.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(6),
       StudySession.find({ userId: req.userId, date: { $gte: todayStart } })
         .populate('learningPathId', 'title color')
@@ -82,9 +82,16 @@ router.get('/overview', auth, async (req, res) => {
           description: t.description,
           completed: t.completed,
           priority: t.priority,
-          category: t.learningPathId?.title || 'General',
+          dueDate: t.dueDate,
+          dueTime: t.dueTime,
+          type: t.type,
+          tags: t.tags || [],
+          category: t.learningPathId?.title
+            || (Array.isArray(t.tags) && t.tags.length > 0 ? t.tags[0] : '')
+            || (t.description || '').replace(/^Subject:\s*/i, '').split(',')[0].trim()
+            || 'Unscheduled',
           learningPathName: t.learningPathId?.title,
-          estimatedDuration: 45, // Default estimate
+          estimatedDuration: parseInt(t.estimatedDuration, 10) || 0,
           completedAt: t.completedAt
         })),
         goals: goals.map(g => ({
