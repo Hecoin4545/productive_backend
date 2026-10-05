@@ -36,7 +36,13 @@ function parseDateRange(query) {
     prevStartDate = new Date(startDate);
     prevStartDate.setDate(prevStartDate.getDate() - 7);
     prevEndDate = new Date(startDate);
-  } else if (period === 'month' || period === '30d') {
+  } else if (period === 'month') {
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    endDate = new Date(now);
+
+    prevStartDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    prevEndDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+  } else if (period === '30d') {
     startDate = new Date(todayStart);
     startDate.setDate(startDate.getDate() - 30);
     endDate = new Date(now);
@@ -393,7 +399,7 @@ router.get('/learning-paths', auth, async (req, res) => {
         topicsStudied: Array.from(topicSet),
         tasksCompleted: completedTodos,
         totalTasks: lpTodos.length,
-        targetDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        targetDate: lp.targetDate || null
       };
     });
 
@@ -607,18 +613,20 @@ router.get('/habits', auth, async (req, res) => {
       }
     });
 
+    const hasData = sessions.length > 0 && totalDurationSecs > 0;
+
     // Find peak day
-    let maxDayIdx = 0;
+    let maxDayIdx = -1;
     dayCounts.forEach((secs, idx) => {
-      if (secs > dayCounts[maxDayIdx]) maxDayIdx = idx;
+      if (secs > 0 && (maxDayIdx === -1 || secs > dayCounts[maxDayIdx])) maxDayIdx = idx;
     });
 
     // Find peak 3-hour window
     let maxWindowSecs = 0;
-    let peakStartHour = 16; // default 4 PM
+    let peakStartHour = null;
 
-    for (let h = 0; h < 22; h++) {
-      const windowSecs = hourCounts[h] + hourCounts[h + 1] + hourCounts[h + 2];
+    for (let h = 0; h < 24; h++) {
+      const windowSecs = hourCounts[h] + hourCounts[(h + 1) % 24] + hourCounts[(h + 2) % 24];
       if (windowSecs > maxWindowSecs) {
         maxWindowSecs = windowSecs;
         peakStartHour = h;
@@ -631,20 +639,24 @@ router.get('/habits', auth, async (req, res) => {
       return `${h12} ${ampm}`;
     };
 
-    const mostActiveTime = `${formatHour(peakStartHour)} – ${formatHour((peakStartHour + 3) % 24)}`;
+    const mostActiveTime = peakStartHour === null
+      ? null
+      : `${formatHour(peakStartHour)} – ${formatHour((peakStartHour + 3) % 24)}`;
     const avgSessionSecs = sessions.length > 0 ? Math.round(totalDurationSecs / sessions.length) : 0;
 
-    // Format hours distribution for bar chart (6 AM to 10 PM)
-    const hourDistribution = [6, 8, 10, 12, 14, 16, 18, 20, 22].map(h => ({
-      hour: formatHour(h),
-      seconds: hourCounts[h] + (hourCounts[h + 1] || 0),
-      hours: Math.round(((hourCounts[h] + (hourCounts[h + 1] || 0)) / 3600) * 10) / 10
+    // Full 24-hour distribution so nothing logged overnight is hidden
+    const hourDistribution = Array.from({ length: 24 }, (_, h) => ({
+      hour: h,
+      label: formatHour(h),
+      seconds: hourCounts[h],
+      hours: Math.round((hourCounts[h] / 3600) * 10) / 10
     }));
 
     res.json({
       success: true,
       data: {
-        mostActiveDay: dayNames[maxDayIdx],
+        hasData,
+        mostActiveDay: maxDayIdx === -1 ? null : dayNames[maxDayIdx],
         mostActiveTime,
         averageSessionFormatted: formatSeconds(avgSessionSecs),
         longestSessionFormatted: formatSeconds(longestSessionSecs),
