@@ -21,8 +21,8 @@ const learningPathSchema = new mongoose.Schema({
   },
   subject: {
     type: String,
-    enum: ['DSA', 'Machine Learning', 'Web Development', 'Mathematics', 'System Design', 'Other'],
-    default: 'DSA'
+    trim: true,
+    default: 'General'
   },
   difficulty: {
     type: String,

@@ -7,6 +7,7 @@ const Topic = require('../models/Topic');
 const StudySession = require('../models/StudySession');
 const Resource = require('../models/Resource');
 const Todo = require('../models/Todo');
+const Blog = require('../models/Blog');
 
 // Helper to recalculate module & learning path progress automatically
 async function recalculateProgress(learningPathId, moduleId) {
@@ -83,6 +84,7 @@ router.get('/:id/full', auth, async (req, res) => {
     const resources = await Resource.find({ userId: req.userId, learningPathId: path._id });
     const todos = await Todo.find({ userId: req.userId, learningPathId: path._id });
     const sessions = await StudySession.find({ userId: req.userId, status: 'completed', $or: [{ learningPathId: path._id }, { subject: path.title }] });
+    const blogs = await Blog.find({ userId: req.userId, learningPathId: path._id }).sort({ createdAt: -1 });
 
     const totalStudySeconds = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
     const completedTopicsCount = topics.filter(t => t.status === 'completed').length;
@@ -125,6 +127,8 @@ router.get('/:id/full', auth, async (req, res) => {
         completedTopics: completedTopicsCount,
         completedTodos: completedTodosCount,
         totalResources: resources.length,
+        totalBlogs: blogs.length,
+        blogs,
         currentTopicName: currentTopic ? currentTopic.title : 'None',
         modules: modulesWithTopics
       }
@@ -356,6 +360,121 @@ router.delete('/topics/:id', auth, async (req, res) => {
     res.json({ success: true, message: 'Topic deleted' });
   } catch (error) {
     console.error('Delete topic error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── BLOG / ARTICLE ENDPOINTS (MEDIUM-STYLE) ─────────────────────────
+
+// Get all blogs for a learning path
+router.get('/:id/blogs', auth, async (req, res) => {
+  try {
+    const blogs = await Blog.find({
+      userId: req.userId,
+      learningPathId: req.params.id
+    }).sort({ createdAt: -1 });
+
+    res.json({ success: true, data: blogs });
+  } catch (error) {
+    console.error('Get blogs error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Get single blog
+router.get('/:id/blogs/:blogId', auth, async (req, res) => {
+  try {
+    const blog = await Blog.findOne({
+      _id: req.params.blogId,
+      userId: req.userId,
+      learningPathId: req.params.id
+    });
+
+    if (!blog) return res.status(404).json({ success: false, message: 'Blog post not found' });
+
+    res.json({ success: true, data: blog });
+  } catch (error) {
+    console.error('Get single blog error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Create blog post for a learning path
+router.post('/:id/blogs', auth, async (req, res) => {
+  try {
+    const { title, subtitle, content, tags, coverImage, published } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ success: false, message: 'Title is required' });
+    }
+
+    const wordCount = (content || '').trim().split(/\s+/).filter(Boolean).length;
+    const readTime = Math.max(1, Math.ceil(wordCount / 200));
+
+    const blog = await Blog.create({
+      userId: req.userId,
+      learningPathId: req.params.id,
+      title: title.trim(),
+      subtitle: (subtitle || '').trim(),
+      content: content || '',
+      tags: Array.isArray(tags) ? tags.map(t => String(t).trim()).filter(Boolean) : [],
+      coverImage: coverImage || '',
+      readTime,
+      published: published !== undefined ? published : true
+    });
+
+    res.status(201).json({ success: true, data: blog });
+  } catch (error) {
+    console.error('Create blog error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Update blog post
+router.put('/:id/blogs/:blogId', auth, async (req, res) => {
+  try {
+    const { title, subtitle, content, tags, coverImage, published } = req.body;
+    const updates = {};
+    if (title !== undefined) updates.title = title.trim();
+    if (subtitle !== undefined) updates.subtitle = subtitle.trim();
+    if (content !== undefined) {
+      updates.content = content;
+      const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
+      updates.readTime = Math.max(1, Math.ceil(wordCount / 200));
+    }
+    if (tags !== undefined) updates.tags = Array.isArray(tags) ? tags.map(t => String(t).trim()).filter(Boolean) : [];
+    if (coverImage !== undefined) updates.coverImage = coverImage;
+    if (published !== undefined) updates.published = published;
+    updates.updatedAt = new Date();
+
+    const blog = await Blog.findOneAndUpdate(
+      { _id: req.params.blogId, userId: req.userId, learningPathId: req.params.id },
+      updates,
+      { new: true }
+    );
+
+    if (!blog) return res.status(404).json({ success: false, message: 'Blog post not found' });
+
+    res.json({ success: true, data: blog });
+  } catch (error) {
+    console.error('Update blog error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Delete blog post
+router.delete('/:id/blogs/:blogId', auth, async (req, res) => {
+  try {
+    const blog = await Blog.findOneAndDelete({
+      _id: req.params.blogId,
+      userId: req.userId,
+      learningPathId: req.params.id
+    });
+
+    if (!blog) return res.status(404).json({ success: false, message: 'Blog post not found' });
+
+    res.json({ success: true, message: 'Blog post deleted' });
+  } catch (error) {
+    console.error('Delete blog error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

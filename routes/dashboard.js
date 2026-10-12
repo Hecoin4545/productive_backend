@@ -83,7 +83,22 @@ router.get('/overview', auth, async (req, res) => {
 
     // Calculate stats
     const todayMinutes = Math.round(todayStudySessions.reduce((sum, s) => sum + (s.duration || 0), 0) / 60);
-    const completedTodos = todos.filter(t => t.completed).length;
+
+    // Only count today's tasks for the stat card (tasks scheduled for today or completed today)
+    const todayTodos = todos.filter(t => {
+      if (t.dueDate) {
+        const d = new Date(t.dueDate);
+        if (d >= todayStart && d < tomorrowStart) return true;
+      }
+      if (t.completed && t.completedAt) {
+        const c = new Date(t.completedAt);
+        if (c >= todayStart && c < tomorrowStart) return true;
+      }
+      return false;
+    });
+    const completedTodayTodos = todayTodos.filter(t => t.completed).length;
+    const totalTodayTodos = todayTodos.length;
+
     const completedGoals = goals.filter(g => g.completed).length;
 
     // Overall progress (average of active learning paths)
@@ -201,8 +216,8 @@ router.get('/overview', auth, async (req, res) => {
         }),
         stats: {
           studyTime: todayMinutes,
-          tasksCompleted: completedTodos,
-          totalTasks: todos.length,
+          tasksCompleted: completedTodayTodos,
+          totalTasks: totalTodayTodos,
           goalsCompleted: completedGoals,
           totalGoals: goals.length,
           streak: calcStreak(streakSessions),
