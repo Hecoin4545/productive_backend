@@ -6,7 +6,7 @@ require('dotenv').config();
 
 const app = express();
 
-// Middleware
+// ─── Middleware ───────────────────────────────────────────────
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
@@ -14,10 +14,9 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 const isAllowedOrigin = (origin) => {
-  if (!origin) return true; // allow non-browser requests
+  if (!origin) return true;
   if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) return true;
   if (allowedOrigins.includes(origin)) return true;
-  // Allow any Vercel app deployment
   if (origin.endsWith('.vercel.app')) return true;
   return false;
 };
@@ -35,19 +34,41 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// MongoDB Connection
+// ─── MongoDB ──────────────────────────────────────────────────
+// In serverless / Vercel, a cold start runs this once and the connection
+// persists across warm invocations. Caching the promise avoids reconnect
+// storms when many concurrent requests arrive.
+let cachedConn = null;
 const connectDB = async () => {
+  if (cachedConn) {
+    try { return await cachedConn; } catch { /* stale — reconnect below */ }
+  }
+  cachedConn = mongoose.connect(process.env.MONGODB_URI, {
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+    maxPoolSize: 5
+  });
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
+    await cachedConn;
     console.log('MongoDB connected successfully');
+    return cachedConn;
   } catch (error) {
     console.error('MongoDB connection error:', error.message);
-    // Don't exit - allow app to run with mock data
-    console.log('Running without database - using mock data');
+    cachedConn = null;
+    throw error;
   }
 };
 
-connectDB();
+// Ensure the database is available before any route runs
+app.use(async (req, res, next) => {
+  if (req.path === '/api/health') return next();
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error('DB connect failed for request:', err.message);
+  }
+  next();
+});
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -61,7 +82,7 @@ app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/resources', require('./routes/resources'));
 app.use('/api/search', require('./routes/search'));
 
-// Health check
+// Health check — works even without a DB connection
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -75,7 +96,11 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Arcstep server running on port ${PORT}`);
-});
+// Export for Vercel serverless; listen for local dev
+module.exports = app;
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Arcstep server running on port ${PORT}`);
+  });
+}
