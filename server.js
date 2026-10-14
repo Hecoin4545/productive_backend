@@ -64,11 +64,13 @@ app.use(async (req, res, next) => {
   if (req.path === '/api/health') return next();
   try {
     await connectDB();
+    next();
   } catch (err) {
     console.error('DB connect failed for request:', err.message);
+    res.status(503).json({ success: false, message: 'Database unavailable. Please try again shortly.' });
   }
-  next();
 });
+
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
