@@ -18,26 +18,58 @@ function createTransporter() {
     return null;
   }
 
+  const user = EMAIL_USER.trim();
+  const pass = EMAIL_PASS.replace(/\s+/g, '').trim();
+
   if (EMAIL_HOST) {
+    const port = parseInt(EMAIL_PORT, 10) || 587;
     return nodemailer.createTransport({
-      host: EMAIL_HOST,
-      port: parseInt(EMAIL_PORT, 10) || 587,
-      secure: EMAIL_SECURE === 'true' || EMAIL_PORT === '465',
-      auth: {
-        user: EMAIL_USER,
-        pass: EMAIL_PASS
-      }
+      host: EMAIL_HOST.trim(),
+      port,
+      secure: EMAIL_SECURE === 'true' || port === 465,
+      auth: { user, pass },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000
     });
   }
 
-  // Default to service-based configuration (e.g., Gmail)
+  // For Gmail, using explicit host with port 587 and STARTTLS is much more reliable
+  // in serverless / cloud hosts (Vercel, AWS Lambda) than nodemailer's default service: 'gmail',
+  // which frequently hits greeting timeouts on port 465.
+  const service = (EMAIL_SERVICE || 'gmail').toLowerCase().trim();
+  if (service === 'gmail') {
+    return nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // TLS
+      auth: { user, pass },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000
+    });
+  }
+
+  // Default to service-based configuration for other providers
   return nodemailer.createTransport({
-    service: EMAIL_SERVICE || 'gmail',
-    auth: {
-      user: EMAIL_USER,
-      pass: EMAIL_PASS
-    }
+    service,
+    auth: { user, pass },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000
   });
+}
+
+/**
+ * Safely parse and format the sender email address.
+ */
+function getSenderAddress(user) {
+  const rawFrom = (process.env.EMAIL_FROM || '').trim();
+  if (rawFrom) {
+    // Strip accidental outer double/single quotes if entered in dashboard (e.g. '"Arcstep" <hets8949@gmail.com>')
+    return rawFrom.replace(/^["']|["']$/g, '');
+  }
+  return `"Arcstep" <${user}>`;
 }
 
 /**
@@ -58,15 +90,21 @@ async function sendVerificationEmail(email, otp, name = '') {
 
   const transporter = createTransporter();
 
-  // If email credentials are not yet configured in .env, permit testing via console
+  // If email credentials are not yet configured in .env:
   if (!transporter) {
+    if (process.env.NODE_ENV === 'production') {
+      const errMessage = 'Email service is not configured on production server. EMAIL_USER and EMAIL_PASS environment variables are missing or not loaded. (Note: on Vercel, you must redeploy after adding environment variables).';
+      console.error(`[EMAIL SERVICE ERROR] ${errMessage}`);
+      throw new Error(errMessage);
+    }
+
     console.warn(
       '[EMAIL SERVICE WARNING] EMAIL_USER / EMAIL_PASS are not configured in .env. Email was NOT sent over network, but OTP code is printed above for local testing.'
     );
     return { success: true, simulated: true };
   }
 
-  const senderEmail = process.env.EMAIL_FROM || `"Arcstep" <${process.env.EMAIL_USER}>`;
+  const senderEmail = getSenderAddress(process.env.EMAIL_USER.trim());
   const greeting = name ? `Hi ${name},` : 'Hello,';
 
   const htmlContent = `
@@ -240,5 +278,6 @@ If you did not request this verification, please safely ignore this email.
 
 module.exports = {
   generateOTP,
-  sendVerificationEmail
+  sendVerificationEmail,
+  createTransporter
 };

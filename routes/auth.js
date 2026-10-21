@@ -4,13 +4,53 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const EmailVerification = require('../models/EmailVerification');
-const { generateOTP, sendVerificationEmail } = require('../utils/emailService');
+const { generateOTP, sendVerificationEmail, createTransporter } = require('../utils/emailService');
 const auth = require('../middleware/auth');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const RESEND_COOLDOWN_MS = 30 * 1000; // 30 seconds
+
+// Diagnostic endpoint to check email configuration and SMTP status
+router.get('/email-status', async (req, res) => {
+  const hasUser = !!process.env.EMAIL_USER;
+  const hasPass = !!process.env.EMAIL_PASS;
+  const hasService = !!process.env.EMAIL_SERVICE;
+  const hasFrom = !!process.env.EMAIL_FROM;
+  const maskedUser = process.env.EMAIL_USER
+    ? process.env.EMAIL_USER.replace(/^(.{2})(.*)(@.*)$/, '$1***$3')
+    : null;
+
+  if (!hasUser || !hasPass) {
+    return res.status(500).json({
+      configured: false,
+      message: 'EMAIL_USER or EMAIL_PASS environment variable is missing on this deployment. If you added them in Vercel settings, you must REDEPLOY for changes to take effect.',
+      environment: process.env.NODE_ENV || 'development',
+      details: { hasService, hasUser, hasPass, hasFrom }
+    });
+  }
+
+  try {
+    const transporter = createTransporter();
+    await transporter.verify();
+    return res.json({
+      configured: true,
+      status: 'connected',
+      message: 'SMTP transporter verified successfully. Server is ready to send emails.',
+      service: process.env.EMAIL_SERVICE || 'gmail',
+      user: maskedUser
+    });
+  } catch (error) {
+    return res.status(500).json({
+      configured: true,
+      status: 'smtp_error',
+      message: error.message,
+      code: error.code || 'UNKNOWN',
+      hint: 'If error is 535 (Authentication Failed), verify 2-Step Verification is ON and generate a fresh Gmail App Password. Check Google Account Security Activity.'
+    });
+  }
+});
 
 // Send Verification OTP before registration
 router.post('/send-otp', async (req, res) => {
