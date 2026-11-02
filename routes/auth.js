@@ -281,7 +281,8 @@ router.post('/register', async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        avatar: user.avatar
+        avatar: user.avatar,
+        customSubjects: user.customSubjects || []
       }
     });
   } catch (error) {
@@ -324,7 +325,8 @@ router.post('/login', async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        avatar: user.avatar
+        avatar: user.avatar,
+        customSubjects: user.customSubjects || []
       }
     });
   } catch (error) {
@@ -342,7 +344,8 @@ router.get('/me', auth, async (req, res) => {
         id: req.user._id,
         name: req.user.name,
         email: req.user.email,
-        avatar: req.user.avatar
+        avatar: req.user.avatar,
+        customSubjects: req.user.customSubjects || []
       }
     });
   } catch (error) {

@@ -31,12 +31,16 @@ router.put('/profile', auth, async (req, res) => {
 
     if (name) updates.name = name;
     if (avatar !== undefined) updates.avatar = avatar;
-    if (customSubjects !== undefined) updates.customSubjects = customSubjects;
+    if (customSubjects !== undefined) {
+      updates.customSubjects = Array.isArray(customSubjects)
+        ? [...new Set(customSubjects.map(s => String(s).trim()).filter(Boolean))]
+        : [];
+    }
 
     const user = await User.findByIdAndUpdate(
       req.userId,
       updates,
-      { new: true, runValidators: true }
+      { returnDocument: 'after', new: true, runValidators: true }
     ).select('-password');
 
     res.json({

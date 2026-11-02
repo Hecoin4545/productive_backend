@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const StudySession = require('../models/StudySession');
+const User = require('../models/User');
 
 // Get study stats — MUST be before /:id to avoid route conflict
 router.get('/stats/summary', auth, async (req, res) => {
@@ -188,6 +189,16 @@ router.post('/', auth, async (req, res) => {
       date: date || new Date(),
       status: status || 'completed'
     });
+
+    // Also persist non-generic subjects to user profile customSubjects
+    if (subject && typeof subject === 'string') {
+      const cleanSubj = subject.trim();
+      if (cleanSubj && cleanSubj.toLowerCase() !== 'general') {
+        User.findByIdAndUpdate(req.userId, {
+          $addToSet: { customSubjects: cleanSubj }
+        }).catch(e => console.error('Error auto-saving subject to user profile:', e.message));
+      }
+    }
 
     const populatedSession = await StudySession.findById(session._id)
       .populate('learningPathId', 'title color');
