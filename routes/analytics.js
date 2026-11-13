@@ -682,6 +682,7 @@ router.get('/recent-activity', auth, async (req, res) => {
     sessions.forEach(s => {
       activities.push({
         id: `session_${s._id}`,
+        sessionId: s._id,
         type: 'session',
         title: `Studied: ${s.subject}`,
         subtitle: `${s.topicName || s.topic || 'Focus'} — ${formatSeconds(s.duration)}`,
